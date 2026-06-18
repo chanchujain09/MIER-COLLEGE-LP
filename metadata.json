@@ -1,0 +1,6 @@
+{
+  "name": "MIER College Admissions",
+  "description": "Premium High-Converting Admissions Landing Page with Interactive Program Guide and Inquiry Portal for MIER College of Education.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
