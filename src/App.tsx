@@ -87,6 +87,17 @@ export default function App() {
     }, 1500);
   };
 
+  // Handle document upload or details refresh for an inquiry
+  const handleUpdateInquiry = (updatedInq: Inquiry) => {
+    const updated = inquiries.map(inq => inq.id === updatedInq.id ? updatedInq : inq);
+    setInquiries(updated);
+    try {
+      localStorage.setItem('mier_admissions_inquiries', JSON.stringify(updated));
+    } catch {
+      console.warn('Unable to write to localStorage');
+    }
+  };
+
   // Safe scroll coordination to form
   const scrollToForm = () => {
     const elem = document.getElementById('program-explorer');
@@ -947,6 +958,7 @@ export default function App() {
         isOpen={isPortalOpen} 
         onClose={() => setIsPortalOpen(false)} 
         inquiries={inquiries}
+        onUpdateInquiry={handleUpdateInquiry}
       />
 
     </div>

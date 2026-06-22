@@ -16,6 +16,15 @@ export interface Program {
   tags: string[];
 }
 
+export interface AttachedFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  url: string;
+  sizeBytes?: number | null;
+  iconUrl?: string;
+}
+
 export interface Inquiry {
   id: string;
   name: string;
@@ -29,6 +38,7 @@ export interface Inquiry {
   message: string;
   date: string;
   status: 'Pending Review' | 'Pre-Screened' | 'Assigned to Counselor' | 'Offer Issued';
+  attachedFiles?: AttachedFile[];
 }
 
 export interface FAQ {

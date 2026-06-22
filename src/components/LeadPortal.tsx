@@ -5,14 +5,20 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { X, Calendar, FileText, CheckCircle2, ChevronRight, MessageSquare, ShieldCheck, HelpCircle, Award, Compass } from 'lucide-react';
-import { Inquiry } from '../types';
+import { 
+  X, Calendar, FileText, CheckCircle2, ChevronRight, MessageSquare, 
+  ShieldCheck, HelpCircle, Award, Compass, Cloud, FileUp, Loader2, 
+  Check, Lock, AlertCircle, ExternalLink, HelpCircle as HelpIcon 
+} from 'lucide-react';
+import { Inquiry, AttachedFile } from '../types';
 import { PROGRAMS } from '../data';
+import { loadGoogleScripts, requestGoogleAccessToken, showGooglePicker } from '../utils/googlePicker';
 
 interface LeadPortalProps {
   isOpen: boolean;
   onClose: () => void;
   inquiries: Inquiry[];
+  onUpdateInquiry: (updatedInq: Inquiry) => void;
 }
 
 interface Message {
@@ -21,8 +27,16 @@ interface Message {
   time: string;
 }
 
-export default function LeadPortal({ isOpen, onClose, inquiries }: LeadPortalProps) {
+export default function LeadPortal({ isOpen, onClose, inquiries, onUpdateInquiry }: LeadPortalProps) {
   const [activeTab, setActiveTab] = useState<'status' | 'scholarship' | 'chat'>('status');
+  
+  // Google Picker states
+  const [googleScriptsLoaded, setGoogleScriptsLoaded] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [loadingScripts, setLoadingScripts] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isVerifyingGoogle, setIsVerifyingGoogle] = useState(false);
+  const [showConfigTips, setShowConfigTips] = useState(false);
   
   // Counselor chat states
   const [chatMessages, setChatMessages] = useState<Message[]>([
@@ -84,6 +98,99 @@ export default function LeadPortal({ isOpen, onClose, inquiries }: LeadPortalPro
       setChatMessages(prev => [...prev, { sender: 'bot', text: botAnswer, time: timestamp }]);
       setIsTyping(false);
     }, 900);
+  };
+
+  // Load Google Scripts when Portal mounts or opens
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingScripts(true);
+      loadGoogleScripts(
+        () => {
+          setGoogleScriptsLoaded(true);
+          setLoadingScripts(false);
+          setAuthError(null);
+        },
+        (err) => {
+          console.error(err);
+          setAuthError(err);
+          setLoadingScripts(false);
+        }
+      );
+    }
+  }, [isOpen]);
+
+  const handleAuthAndPicker = (inq: Inquiry, documentSlot: string) => {
+    const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
+    
+    if (!clientId || clientId.includes('your_google_client_id_here') || clientId.trim() === '') {
+      // Trigger demo picker fallback
+      triggerDemoPicker(inq, documentSlot);
+      return;
+    }
+
+    setIsVerifyingGoogle(true);
+    setAuthError(null);
+
+    requestGoogleAccessToken(clientId, (token, error) => {
+      setIsVerifyingGoogle(false);
+      if (error) {
+        console.warn('Google Auth Error:', error);
+        setAuthError(`OAuth Authorization Failed: ${error}. Triggering developer fallback...`);
+        triggerDemoPicker(inq, documentSlot);
+      } else if (token) {
+        setAccessToken(token);
+        launchRealPicker(token, inq, documentSlot);
+      }
+    });
+  };
+
+  const launchRealPicker = (token: string, inq: Inquiry, documentSlot: string) => {
+    showGooglePicker(token, (file) => {
+      const prevAttached = inq.attachedFiles || [];
+      const newFile: AttachedFile = {
+        id: file.id,
+        name: `${documentSlot}: ${file.name}`,
+        mimeType: file.mimeType,
+        url: file.url,
+        sizeBytes: file.sizeBytes,
+        iconUrl: file.iconUrl,
+      };
+      
+      const updatedInq: Inquiry = {
+        ...inq,
+        attachedFiles: [...prevAttached.filter(f => !f.name.startsWith(documentSlot)), newFile],
+      };
+      
+      onUpdateInquiry(updatedInq);
+    });
+  };
+
+  const triggerDemoPicker = (inq: Inquiry, documentSlot: string) => {
+    const mockFiles: Record<string, string> = {
+      "Class 10th Marks Sheet": "Class_10_Marksheet_2020.pdf",
+      "Class 12th Marks Sheet": "Senior_Secondary_Certificate_2022.pdf",
+      "Graduation Certificate": "Bachelor_of_Science_Degree.pdf",
+      "Domicile Certificate": "Domicile_Certificate_J_K.pdf",
+    };
+    
+    const fileName = mockFiles[documentSlot] || "Attached_Document.pdf";
+    const fileId = "mock-drive-" + Math.random().toString(36).substr(2, 9);
+    
+    const prevAttached = inq.attachedFiles || [];
+    const newFile: AttachedFile = {
+      id: fileId,
+      name: `${documentSlot}: ${fileName}`,
+      mimeType: "application/pdf",
+      url: "https://drive.google.com/drive/my-drive",
+      sizeBytes: 1542000,
+    };
+    
+    const updatedInq: Inquiry = {
+      ...inq,
+      attachedFiles: [...prevAttached.filter(f => !f.name.startsWith(documentSlot)), newFile],
+    };
+    
+    onUpdateInquiry(updatedInq);
   };
 
   const getProgramName = (id: string) => {
@@ -250,6 +357,129 @@ export default function LeadPortal({ isOpen, onClose, inquiries }: LeadPortalPro
                             <span className="text-[9px] font-semibold mt-1 text-center scale-90">Seat Allocation</span>
                           </div>
 
+                        </div>
+                      </div>
+
+                      {/* Document Picker Panel / Submission Board */}
+                      <div className="mt-4 p-3.5 bg-white/5 border border-white/10 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs font-black text-brand-gold uppercase tracking-wider">
+                            <Cloud className="h-4 w-4 animate-pulse" />
+                            <span>NAAC A+ Verification Documents</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowConfigTips(!showConfigTips)}
+                            className="text-white/40 hover:text-white transition-colors cursor-pointer"
+                            title="OAuth Setup Help"
+                          >
+                            <HelpIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        
+                        <p className="text-[10.5px] text-white/60 leading-relaxed font-semibold">
+                          Select and attach required documents securely from Google Drive using the Google Picker container.
+                        </p>
+
+                        {/* Error notice if present */}
+                        {authError && (
+                          <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] rounded-lg flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                            <span className="leading-tight">{authError}</span>
+                          </div>
+                        )}
+
+                        {/* Setup Advice Panel */}
+                        {showConfigTips && (
+                          <div className="p-3 bg-brand-navy/80 border border-brand-gold/15 text-[10px] text-white/85 rounded-lg space-y-2">
+                            <p className="font-bold text-brand-gold">📋 How to configure Google Picker:</p>
+                            <ol className="list-decimal list-inside space-y-1 text-white/70 font-semibold">
+                              <li>Set <code className="bg-white/10 px-1 py-0.5 rounded text-brand-gold">VITE_GOOGLE_CLIENT_ID</code> in AI Studio.</li>
+                              <li>Make sure authorized JavaScript origins allow this sandbox URL.</li>
+                              <li>Otherwise, the app uses a robust simulated Picker fallback.</li>
+                            </ol>
+                          </div>
+                        )}
+
+                        {/* File Slots Checklist */}
+                        <div className="space-y-2 pt-1 font-sans">
+                          {[
+                            "Class 10th Marks Sheet",
+                            "Class 12th Marks Sheet",
+                            "Graduation Certificate",
+                            "Domicile Certificate"
+                          ].map((slot) => {
+                            const attached = inq.attachedFiles?.find(f => f.name.startsWith(slot));
+                            return (
+                              <div key={slot} className="flex items-center justify-between p-2 rounded-lg bg-brand-navy/40 border border-white/5 text-xs">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    {attached ? (
+                                      <span className="h-4 w-4 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center text-[9px] font-bold">
+                                        ✓
+                                      </span>
+                                    ) : (
+                                      <span className="h-4 w-4 bg-white/5 text-white/30 rounded-full flex items-center justify-center text-[9px]">
+                                        •
+                                      </span>
+                                    )}
+                                    <span className={`font-bold ${attached ? 'text-white' : 'text-white/60'}`}>{slot}</span>
+                                  </div>
+                                  
+                                  {attached && (
+                                    <p className="text-[10px] text-brand-gold font-mono truncate max-w-[170px] pl-5">
+                                      {attached.name.replace(`${slot}: `, '')}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {attached ? (
+                                    <>
+                                      <a
+                                        href={attached.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-0.5 hover:underline"
+                                      >
+                                        <span>Open</span>
+                                        <ExternalLink className="h-3 w-3" />
+                                      </a>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (window.confirm(`Remove ${slot} proof?`)) {
+                                            const updatedInq: Inquiry = {
+                                              ...inq,
+                                              attachedFiles: (inq.attachedFiles || []).filter(f => f.id !== attached.id),
+                                            };
+                                            onUpdateInquiry(updatedInq);
+                                          }
+                                        }}
+                                        className="text-[10px] text-red-400 hover:text-red-300 font-extrabold cursor-pointer"
+                                      >
+                                        Remove
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAuthAndPicker(inq, slot)}
+                                      disabled={isVerifyingGoogle}
+                                      className="inline-flex items-center gap-1.5 bg-brand-gold hover:bg-brand-gold/90 disabled:opacity-50 text-brand-navy font-bold text-[10px] px-2.5 py-1 rounded transition-colors cursor-pointer"
+                                    >
+                                      {isVerifyingGoogle ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <FileUp className="h-3 w-3" />
+                                      )}
+                                      <span>Attach</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 
