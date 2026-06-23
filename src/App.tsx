@@ -17,6 +17,7 @@ import Header from './components/Header';
 import LeadForm from './components/LeadForm';
 import ProgramExplorer from './components/ProgramExplorer';
 import LeadPortal from './components/LeadPortal';
+import CareerOpportunities from './components/CareerOpportunities';
 import { Inquiry } from './types';
 import { HERO_CONTENT, ACHIEVEMENTS, REVIEWS, FAQS } from './data';
 
@@ -287,6 +288,8 @@ export default function App() {
 
       {/* 4. PROGRAM EXPLORER COMPONENT */}
       <ProgramExplorer onSelectProgram={handleSelectProgramFromExplorer} />
+
+      <CareerOpportunities />
 
       {/* 4. WHY CHOOSE MIER COLLEGE? (SECTION 4 - Elegant matching the high-fidelity reference image, made small and minimal) */}
       <section className="w-full bg-[#FAF9F6] py-12 md:py-16 px-4 md:px-8 relative overflow-hidden">
